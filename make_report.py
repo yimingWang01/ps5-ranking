@@ -7,6 +7,123 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "ps5_scored.json")
 OUT = os.path.join(HERE, "PS5游戏推荐游玩度排行.html")
 
+# ============ 交互增强：卡片跳转 / 浮动条 / 行高亮 ============
+# 这些是普通字符串常量（不走 f-string），所以内部的花括号无需转义。
+EXTRA_CSS = """
+/* 卡片可点击跳转 */
+.linkable{cursor:pointer;position:relative;transition:transform .15s,box-shadow .15s,border-color .15s}
+.linkable:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.12);border-color:#c7d2fe}
+/* 目标行高亮 */
+tr.row-hl td{animation:rowFlash 2s ease-out}
+tr.row-hl td:first-child{box-shadow:inset 3px 0 0 #f59e0b}
+@keyframes rowFlash{0%,45%{background:#fef08a}100%{background:transparent}}
+
+/* 顶部浮动快捷跳转条 */
+#jumpbar{position:fixed;top:14px;right:18px;z-index:99;display:flex;gap:8px;align-items:center}
+#jumpbar .jbtn{display:inline-flex;align-items:center;gap:6px;border:0;cursor:pointer;
+ font-family:inherit;font-size:14px;font-weight:600;color:#fff;text-decoration:none;
+ background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:999px;padding:11px 20px;
+ box-shadow:0 6px 20px rgba(79,70,229,.38);transition:transform .15s,box-shadow .15s}
+#jumpbar .jbtn:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(79,70,229,.5)}
+#jumpbar .jbtn:active{transform:translateY(0) scale(.97)}
+#jumpbar .jbtn.ghost{background:#fff;color:#4f46e5;border:1.5px solid #c7d2fe;
+ box-shadow:0 4px 14px rgba(79,70,229,.16)}
+#jumpbar .jbtn.ghost:hover{background:#eef2ff}
+
+/* 顶部醒目 CTA 区块 */
+.quick-nav{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:22px}
+.quick-nav a{display:inline-flex;align-items:center;gap:8px;text-decoration:none;
+ font-size:15px;font-weight:600;border-radius:10px;padding:13px 22px;transition:transform .15s,box-shadow .15s}
+.quick-nav a.primary{background:#fff;color:#4c1d95;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+.quick-nav a.primary:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,0,0,.26)}
+.quick-nav a.sec{background:rgba(255,255,255,.16);color:#fff;border:1.5px solid rgba(255,255,255,.42)}
+.quick-nav a.sec:hover{background:rgba(255,255,255,.26)}
+
+/* 完整榜单「回到必玩清单」 */
+#back-must{position:fixed;right:18px;bottom:20px;z-index:98;display:none;
+ font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;color:#4f46e5;
+ background:#fff;border:1.5px solid #c7d2fe;border-radius:999px;padding:10px 16px;
+ box-shadow:0 6px 18px rgba(0,0,0,.14)}
+#back-must:hover{background:#eef2ff}
+@media (max-width:720px){
+ #jumpbar{top:auto;bottom:16px;right:12px;flex-direction:column-reverse}
+ #jumpbar .jbtn{padding:10px 15px;font-size:13px}
+ #back-must{bottom:auto;top:14px;right:12px}
+ .quick-nav a{flex:1 1 100%;justify-content:center}
+}
+"""
+
+EXTRA_TOP = """
+<div id="jumpbar">
+  <a class="jbtn" href="#full-list">🔍 跳到完整榜单 ↓</a>
+  <a class="jbtn ghost" href="#must-list">⭐ 必玩清单</a>
+</div>
+"""
+
+EXTRA_CTA = """
+  <div class="quick-nav">
+    <a class="primary" href="#full-list">🚀 一键跳转到完整榜单</a>
+    <a class="sec" href="#must-list">⭐ 先看必玩清单</a>
+  </div>
+"""
+
+EXTRA_BOOT = """
+<button id="back-must" type="button">↑ 回到必玩清单</button>
+<script>
+(function(){
+  // 必玩清单卡片点击 → 跳到完整榜单对应行
+  var cards=document.querySelectorAll('.top-card.linkable');
+  cards.forEach(function(c){
+    c.addEventListener('click',function(){
+      var id=c.getAttribute('data-target');
+      if(!id){return;}
+      var row=document.getElementById(id);
+      if(!row){return;}
+      // 若目标行被筛选隐藏，先清空筛选条件
+      var q=document.getElementById('q'),ft=document.getElementById('ft'),fg=document.getElementById('fg');
+      if(row.style.display==='none'){
+        if(q)q.value=''; if(ft)ft.value=''; if(fg)fg.value='';
+        [q,ft,fg].forEach(function(e){ if(e) e.dispatchEvent(new Event('input',{bubbles:true})); });
+      }
+      requestAnimationFrame(function(){
+        row.scrollIntoView({behavior:'smooth',block:'center'});
+        row.classList.remove('row-hl');
+        void row.offsetWidth;
+        row.classList.add('row-hl');
+        setTimeout(function(){row.classList.remove('row-hl');},2200);
+      });
+    });
+  });
+
+  // 回到必玩清单按钮：滚到完整榜单时出现
+  var back=document.getElementById('back-must');
+  var anchor=document.getElementById('full-list');
+  if(back&&anchor){
+    var io=new IntersectionObserver(function(es){
+      es.forEach(function(e){ back.style.display=e.isIntersecting?'block':'none'; });
+    },{rootMargin:'-90px 0px 0px 0px',threshold:0});
+    io.observe(anchor);
+    back.addEventListener('click',function(){
+      var m=document.getElementById('must-list');
+      if(m) m.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+  }
+
+  // 锚点兜底：超大页面（上千行表格）原生 #hash 跳转常失效，
+  // 这里统一接管所有站内锚点，改走 scrollIntoView。
+  document.querySelectorAll('a[href^="#"]').forEach(function(a){
+    a.addEventListener('click',function(ev){
+      var id=this.getAttribute('href').slice(1);
+      var el=id&&document.getElementById(id);
+      if(!el){return;}
+      ev.preventDefault();
+      el.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+  });
+})();
+</script>
+"""
+
 TIER_META = {
     "S":  ("S", "时代级必玩",     "#dc2626", "#fee2e2", "#7f1d1d"),
     "A+": ("A+", "顶级佳作",       "#ea580c", "#ffedd5", "#7c2d12"),
@@ -44,7 +161,7 @@ def main():
         t = d["tier"]
         code, label, fg, bg, dark = TIER_META[t]
         rows.append(
-            f'<tr data-tier="{t}" data-genre="{esc(d["genre"])}" data-score="{d["score"]}">'
+            f'<tr id="row{d["rank"]}" data-tier="{t}" data-genre="{esc(d["genre"])}" data-score="{d["score"]}">'
             f'<td class="num">{d["rank"]}</td>'
             f'<td class="score"><span style="color:{fg};font-weight:700">{d["score"]:.1f}</span></td>'
             f'<td><span class="badge" style="background:{bg};color:{dark}">{code}</span></td>'
@@ -78,7 +195,7 @@ def main():
         t = d["tier"]
         code, label, fg, bg, dark = TIER_META[t]
         return (
-            f'<div class="top-card">'
+            f'<div class="top-card linkable" data-target="row{d["rank"]}" title="点击跳转到完整榜单对应位置">'
             f'<div class="tc-rank" style="background:{fg}">{i}</div>'
             f'<div class="tc-main">'
             f'<div class="tc-name">{esc(d["title"].split(".")[0])}</div>'
@@ -206,9 +323,9 @@ footer{{margin-top:48px;padding-top:20px;border-top:1px solid #e8ebef;
  .title,.note{{max-width:200px}}
  thead th:nth-child(6),tbody td:nth-child(6),thead th:nth-child(8),tbody td:nth-child(8){{display:none}}
 }}
-</style>
+{EXTRA_CSS}</style>
 </head>
-<body>
+<body>{EXTRA_TOP}
 <div class="wrap">
 
 <header>
@@ -219,7 +336,7 @@ footer{{margin-top:48px;padding-top:20px;border-top:1px solid #e8ebef;
     <div class="kpi"><div class="n">{tier_cnt['S']}+{tier_cnt['A+']}</div><div class="l">S级+A级 必玩清单</div></div>
     <div class="kpi"><div class="n">{len(genre_cnt)}</div><div class="l">覆盖品类</div></div>
     <div class="kpi"><div class="n">{curated}</div><div class="l">逐款策展依据</div></div>
-  </div>
+  </div>{EXTRA_CTA}
 </header>
 
 <div class="note-box">
@@ -233,7 +350,7 @@ footer{{margin-top:48px;padding-top:20px;border-top:1px solid #e8ebef;
 <h2>分档总览</h2>
 <div class="tier-grid">{''.join(cards)}</div>
 
-<h2>必玩清单（按档位）</h2>
+<h2 id="must-list">必玩清单（按档位）</h2>
 {''.join(top_blocks)}
 
 <h2>品类分布</h2>
@@ -249,7 +366,7 @@ footer{{margin-top:48px;padding-top:20px;border-top:1px solid #e8ebef;
   <select id="fg"><option value="">全部品类</option>{gopts}</select>
   <span id="count"></span>
 </div>
-<table>
+<table id="full-list">
 <thead><tr>
   <th class="num">#</th><th class="score">分</th><th>档</th><th>游戏</th>
   <th>品类</th><th>推荐理由</th><th>来源标签</th><th>链接</th>
@@ -281,7 +398,7 @@ footer{{margin-top:48px;padding-top:20px;border-top:1px solid #e8ebef;
   [q,ft,fg].forEach(function(e){{e.addEventListener('input',upd);}});
   upd();
 }})();
-</script>
+</script>{EXTRA_BOOT}
 </body>
 </html>"""
 

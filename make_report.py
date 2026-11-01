@@ -31,6 +31,8 @@ def main():
     # ---- 统计 ----
     tier_cnt = Counter(d["tier"] for d in data)
     genre_cnt = Counter(d["genre"].split("/")[0] for d in data)
+    fb_cnt = sum(1 for d in data if d.get("note") == "资料有限，口碑待观察")
+    curated = total - fb_cnt
 
     # ---- 各档位代表作品（取分数最高的前 N） ----
     tier_pick = {
@@ -124,7 +126,7 @@ def main():
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PS5 游戏推荐游玩度排行 · 977 款</title>
+<title>PS5 游戏推荐游玩度排行 · {total} 款</title>
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
@@ -211,12 +213,12 @@ footer{{margin-top:48px;padding-top:20px;border-top:1px solid #e8ebef;
 
 <header>
   <h1>PS5 游戏推荐游玩度排行</h1>
-  <p>全量抓取自 2468c.com/ps5game，共 40 页 · {total} 款游戏 · 按推荐游玩度打分排序</p>
+  <p>数据抓取自 2468c.com/ps5game 列表页（每次 40 页）· {total} 款游戏（含历史累积）· 按推荐游玩度打分排序</p>
   <div class="kpis">
     <div class="kpi"><div class="n">{total}</div><div class="l">游戏总数</div></div>
     <div class="kpi"><div class="n">{tier_cnt['S']}+{tier_cnt['A+']}</div><div class="l">S级+A级 必玩清单</div></div>
     <div class="kpi"><div class="n">{len(genre_cnt)}</div><div class="l">覆盖品类</div></div>
-    <div class="kpi"><div class="n">830</div><div class="l">逐款策展依据</div></div>
+    <div class="kpi"><div class="n">{curated}</div><div class="l">逐款策展依据</div></div>
   </div>
 </header>
 

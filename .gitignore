@@ -4,3 +4,7 @@ node_modules/
 .workbuddy/
 __pycache__/
 *.pyc
+
+# 构建产物：index.html 是其副本，仅保留 index.html 作为 Pages 入口
+PS5游戏推荐游玩度排行.html
+*.bak-*
